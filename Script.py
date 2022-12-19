@@ -1,59 +1,99 @@
 import requests
 from bs4 import BeautifulSoup
 
-# import time # pour utiliser des méthodes de temporisation et simuler un utilisateur réel
-
-url = 'http://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html'
-page = requests.get(url)  # Response -> code 200 = ok
+url = 'http://books.toscrape.com/catalogue/category/books/sequential-art_5/index.html'
+page = requests.get(url)
 
 if page.ok:  # vérifie si la réponse est ok (code 200)
-    soup = BeautifulSoup(page.text, 'html.parser')  # Récupération de la page
+    soup = BeautifulSoup(page.text, 'html.parser')
 
-    table = soup.find('table')  # Chercher table
-    liste_td = table.find_all('td')  # Liste des valeurs de td
+    # Identifier nombre de pages à parcourir
+    current_field = soup.find(class_='current').string
+    nb_pages = int(current_field.replace('Page 1 of ', ''))
+    root = 'http://books.toscrape.com/catalogue/category/books/sequential-art_5/'
+    urls_catalogue = ['http://books.toscrape.com/catalogue/category/books/sequential-art_5/index.html']
 
-    # Test de récupération de valeurs d'un tableau en parcourant chaque ligne. ça renvoie des valeurs -1
-    # TODO : demander pourquoi ça fonctionne comme ça.
-    print('Comportement à comprendre')
-    for tr in table:
-        td = tr.find('td')
-        print(td)
+    # Lister pages du catalogue à scraper
+    for i in range(nb_pages):
+        if i > 0:
+            url_page = str(root + 'page-' + str(i + 1) + '.html')
+            urls_catalogue.append(url_page)
 
-    # Liste toutes les variables à récupérer sur le fichier csv
-    upc = liste_td[0].string
-    title = soup.find('h1').string
-    price_inc_tax = liste_td[3].string.replace('Â', '')
-    print(liste_td[3].string)  # TODO : pourquoi le string renvoi le caractère Â ?
-    price_exc_tax = liste_td[2].string.replace('Â', '')
-    text_number_available = liste_td[5].string
-    number_available = ''
-    # Récupérer les valeurs numériques du str --> valeur de stock
-    for str in text_number_available:
-        if str.isdigit():
-            number_available = number_available + str
-    product_description = 'tbd'
-    category = soup.find('ul',
-                         {'class': 'breadcrumb'}).find('a',
-                                                       {'href': "../category/books/poetry_23/index.html"}).get_text()
-    review_rating_list = soup.find('p', {'class': 'instock availability'}).find_next_sibling().get_attribute_list(
-        'class')
-    review_rating_list.remove('star-rating')
-    review_rating = review_rating_list[0]
-    image_url = 'http://books.toscrape.com' + soup.img['src'].replace('../..', '')
+    # Ouvrir fichier pour lister les urls des livres
+    with open('output/sequential_art.txt', 'w') as url_file:
 
-    # Écriture ligne csv sous forme de str
-    ligne_csv = url + ',' + upc + ',' + title + ',' + price_inc_tax + ',' + price_exc_tax + ',' \
-                + number_available + ',' + 'product_description' + ',' + category + ',' \
-                + review_rating + ',' + image_url + '\n'
+        # Parcourir chaque page de catalogue
+        for catalogue in urls_catalogue:
+            catalogue_page = requests.get(catalogue)
+            catalogue_soup = BeautifulSoup(catalogue_page.text, 'html.parser')
 
-    # Écrire fichier csv
-    with open('output/livres.csv', 'w') as output_file:
-        # Écrire en-tête
-        output_file.write('product_page_url,universal_product_code (upc),title,price_including_tax,'
-                          'price_excluding_tax,number_available,product_description,category,review_rating,'
-                          'image_url\n')
-        # Écrire contenu page
-        output_file.write(ligne_csv)
+            # Récupérer tous les liens d'une page
+            h3_list = catalogue_soup.find('section').find_all('h3')
+
+            # Parcourir chaque titre de livre pour récupérer l'url et l'écrire dans un fichier .txt
+            for h3 in h3_list:
+                book_url = 'http://books.toscrape.com/catalogue' + h3.a['href'].replace('../../..', '')
+                url_file.write(book_url + '\n')
+
+    with open('output/sequential_art.txt', 'r') as url_list:
+        # Ouvrir fichier csv pour écrire les noms des livres
+        with open('output/livres.csv', 'w') as output_file:
+            # Écrire en-tête
+            output_file.write('product_page_url,universal_product_code (upc),title,price_including_tax,'
+                              'price_excluding_tax,number_available,product_description,category,review_rating,'
+                              'image_url\n')
+            for book_url in url_list:
+                book_page = requests.get(book_url.strip())  # Response -> code 200 = ok
+
+                if book_page.ok:  # vérifie si la réponse est ok (code 200)
+                    print(book_page)
+                    book_soup = BeautifulSoup(book_page.text, 'html.parser')  # Récupération de la page
+
+                    table = book_soup.find('table')  # Chercher table
+                    liste_td = table.find_all('td')  # Liste des valeurs de td
+
+                    # Test de récupération de valeurs d'un tableau en parcourant chaque ligne. ça renvoie des valeurs -1
+                    # TODO : demander pourquoi ça fonctionne comme ça.
+                    for tr in table:
+                        td = tr.find('td')
+                        # print(td)
+
+                    # Liste toutes les variables à récupérer sur le fichier csv
+                    upc = liste_td[0].string
+                    title = book_soup.find('h1').string
+                    price_inc_tax = liste_td[3].string.replace('Â', '')
+                    # print(liste_td[3].string)  # TODO : pourquoi le string renvoi le caractère Â ?
+                    price_exc_tax = liste_td[2].string.replace('Â', '')
+                    text_number_available = liste_td[5].string
+                    number_available = ''
+                    # Récupérer les valeurs numériques du str → valeur de stock
+                    for string in text_number_available:
+                        if string.isdigit():
+                            number_available = number_available + string
+                    product_description = 'tbd'
+                    category = 'sequential-art_5'
+                    category_url = '../category/books/' + category + '/index.html'
+                    category_field = book_soup.find('ul',
+                                                    {'class': 'breadcrumb'}).find('a',
+                                                                                  {'href': category_url}).string
+                    review_rating_list = book_soup.find('p',
+                                                        {
+                                                            'class': 'instock availability'}).find_next_sibling().get_attribute_list(
+                        'class')
+                    review_rating_list.remove('star-rating')
+                    review_rating = review_rating_list[0]
+                    image_url = 'http://books.toscrape.com' + book_soup.img['src'].replace('../..', '')
+
+                    # Écriture ligne csv sous forme de str
+                    ligne_csv = url + ',' + upc + ',' + title + ',' + price_inc_tax + ',' + price_exc_tax + ',' + \
+                                number_available + ',' + 'product_description' + ',' + category + ',' \
+                                + review_rating + ',' + image_url + '\n'
+
+                    # Écrire contenu page
+                    output_file.write(ligne_csv)
+
+                else:
+                    print(book_page)
 else:
     print(page)
 
