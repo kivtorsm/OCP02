@@ -1,7 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import csv
-import os, shutil
+import os
+import shutil
 
 # Nettoyer répertoire output
 folder = './output/'
@@ -15,9 +16,16 @@ for filename in os.listdir(folder):
     except Exception as e:
         print('Failed to delete %s. Reason: %s' % (file_path, e))
 
+# Create target Directory if don't exist
+dir_img = './output/img'
+if not os.path.exists(dir_img):
+    os.mkdir(dir_img)
+    print("Directory ", dir_img, " Created ")
+else:
+    print("Directory ", dir_img, " already exists")
+
 url = 'http://books.toscrape.com/index.html'
 page = requests.get(url)
-
 
 if page.ok:
     soup = BeautifulSoup(page.text, 'html.parser')
@@ -26,13 +34,14 @@ if page.ok:
 
     # Enregistrer la liste des catégories et des urls dans un fichier csv
     with open('./output/categories.csv', 'w') as file:
-        file.write('category_name,category_code,category_url\n')    # Écrire en-tête du fichier csv
+        file.write('category_name,category_code,category_url\n')  # Écrire en-tête du fichier csv
 
         # Parcourir liste des catégories et les écrire dans le fichier
         for i in range(nb_categories):
             category_name = category_bloc.find_all('li')[i].a.string.strip()
             category_href = category_bloc.find_all('a')[i].get('href')
-            category_code = category_bloc.find_all('a')[i].get('href').replace('catalogue/category/books/', '').replace('/index.html', '')
+            category_code = category_bloc.find_all('a')[i].get('href').replace('catalogue/category/books/', '').replace(
+                '/index.html', '')
             category_url = url.replace('index.html', '') + category_href
             file.write(category_name + ',' + category_code + ',' + category_url + '\n')
 
@@ -41,10 +50,10 @@ else:
 
 with open('./output/categories.csv', newline='') as file:
     reader = csv.DictReader(file)
-    i = 0   # Compteur de livres finis
-    k = 0   # compteur de catégories finies
+    n = 0  # Compteur de livres finis
+    k = 0  # compteur de catégories finies
     for row in reader:
-        j = 0   # Remise à 0 du compteur de livres enregistrés par catégorie
+        j = 0  # Remise à 0 du compteur de livres enregistrés par catégorie
         category_url = row['category_url']
         category_page = requests.get(category_url)
         category_code = row['category_code']
@@ -61,8 +70,6 @@ with open('./output/categories.csv', newline='') as file:
             category_root = books_root + row['category_code']
             urls_catalogue = [row['category_url']]
             books_root = 'http://books.toscrape.com/catalogue/category/books/'
-            category_root = books_root + row['category_code']
-            urls_catalogue = [row['category_url']]
 
             # Vérifier si la catégorie contient une seule page
             current_field_response = category_soup.find(class_='current')
@@ -118,8 +125,8 @@ with open('./output/categories.csv', newline='') as file:
                             table = book_soup.find('table')  # Chercher table
                             liste_td = table.find_all('td')  # Liste des valeurs de td
 
-                            # Test de récupération de valeurs d'un tableau en parcourant chaque ligne. ça renvoie des valeurs -1
-                            # TODO : demander pourquoi ça fonctionne comme ça.
+                            # Test de récupération de valeurs d'un tableau en parcourant chaque ligne. ça renvoie des
+                            # valeurs -1 TODO : demander pourquoi ça fonctionne comme ça.
                             for tr in table:
                                 td = tr.find('td')
                                 # print(td)
@@ -141,25 +148,49 @@ with open('./output/categories.csv', newline='') as file:
                             # print(category_url)
                             category_field = book_soup.find('ul',
                                                             {'class': 'breadcrumb'}).find('a',
-                                                                                          {'href': category_url}).get_text()
+                                                                                          {'href': category_url}).string
                             review_rating_list = book_soup.find('p',
                                                                 {
-                                                                    'class': 'instock availability'}).find_next_sibling().get_attribute_list('class')
+                                                                    'class': 'instock availability'}).find_next_sibling().get_attribute_list(
+                                'class')
                             review_rating_list.remove('star-rating')
                             review_rating = review_rating_list[0]
                             image_url = 'http://books.toscrape.com' + book_soup.img['src'].replace('../..', '')
 
                             # Écriture ligne csv sous forme de str
-                            ligne_csv = url + ',' + upc + ',' + title + ',' + price_inc_tax + ',' + price_exc_tax + ',' + \
-                                        number_available + ',' + 'product_description' + ',' + category_code + ',' \
-                                        + review_rating + ',' + image_url + '\n'
+                            ligne_csv = url + ',' + upc + ',' + title + ',' + price_inc_tax + ',' + \
+                            price_exc_tax + ',' + number_available + ',' + 'product_description' + ',' + \
+                            category_code + ',' + review_rating + ',' + image_url + '\n'
 
                             # Écrire contenu page
                             output_file.write(ligne_csv)
-                            i += 1
+                            n += 1
                             j += 1
-                            print(str(i) + ' livres enregistrés au total et ' + str(j) + ' dans ' + category_name)
+                            print(str(n) + ' livres enregistrés au total et ' + str(j) + ' dans ' + category_name)
 
+                            # Enregistrer image livre
+
+                            image_url_code = book_soup.find('img')['src']
+                            image_url = 'http://books.toscrape.com' + image_url_code.replace('../..', '')
+                            filename = './output/img/' + upc + '.jpg'
+                            # print(filename)
+
+                            # Open the url image, set stream to True, this will return the stream content.
+                            r = requests.get(image_url, stream=True)
+
+                            # Check if the image was retrieved successfully
+                            if r.status_code == 200:
+                                # Set decode_content value to True, otherwise the downloaded image file's size will
+                                # be zero.
+                                r.raw.decode_content = True
+
+                                # Open a local file with wb ( write binary ) permission.
+                                with open(filename, 'wb') as f:
+                                    shutil.copyfileobj(r.raw, f)
+
+                                print('Image sucessfully Downloaded: ', filename)
+                            else:
+                                print('Image Couldn\'t be retreived')
 
                         else:
                             print(book_page)
