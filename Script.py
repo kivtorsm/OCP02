@@ -4,36 +4,64 @@ import csv
 import os
 import shutil
 
-# Nettoyer répertoire output
+# Nettoyer répertoire output s'il existe
 folder = './output/'
-for filename in os.listdir(folder):
-    file_path = os.path.join(folder, filename)
-    try:
-        if os.path.isfile(file_path) or os.path.islink(file_path):
-            os.unlink(file_path)
-        elif os.path.isdir(file_path):
-            shutil.rmtree(file_path)
-    except Exception as e:
-        print('Failed to delete %s. Reason: %s' % (file_path, e))
+if not os.path.exists(folder):
+    print("Directory ", folder, " doesn't exist ")
+else:
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-# Create target Directory if don't exist
+# Nettoyer répertoire tmp
+folder = './tmp/'
+if not os.path.exists(folder):
+    print("Directory ", folder, " doesn't exist ")
+else:
+    for filename in os.listdir(folder):
+        file_path = os.path.join(folder, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+# Create img Directory tree if it doesn't exist
 dir_img = './output/img'
 if not os.path.exists(dir_img):
-    os.mkdir(dir_img)
+    os.makedirs(dir_img)
     print("Directory ", dir_img, " Created ")
 else:
     print("Directory ", dir_img, " already exists")
 
+# Create tmp Directory tree if it doesn't exist
+dir = './tmp'
+if not os.path.exists(dir):
+    os.makedirs(dir)
+    print("Directory ", dir, " Created ")
+else:
+    print("Directory ", dir, " already exists")
+
+# List all categories and save links in csv file
 url = 'http://books.toscrape.com/index.html'
 page = requests.get(url)
 
 if page.ok:
-    soup = BeautifulSoup(page.text, 'html.parser')
+    soup = BeautifulSoup(page.content, 'html.parser')
     category_bloc = soup.find(class_='nav nav-list').find('ul')
     nb_categories = len(category_bloc.find_all('a'))
+    print("Encoded method :", soup.original_encoding)
 
     # Enregistrer la liste des catégories et des urls dans un fichier csv
-    with open('./output/categories.csv', 'w') as file:
+    with open('./tmp/categories.csv', 'w') as file:
         file.write('category_name,category_code,category_url\n')  # Écrire en-tête du fichier csv
 
         # Parcourir liste des catégories et les écrire dans le fichier
@@ -48,7 +76,7 @@ if page.ok:
 else:
     print(page)
 
-with open('./output/categories.csv', newline='') as file:
+with open('./tmp/categories.csv', newline='') as file:
     reader = csv.DictReader(file)
     n = 0  # Compteur de livres finis
     k = 0  # compteur de catégories finies
@@ -63,7 +91,7 @@ with open('./output/categories.csv', newline='') as file:
         # print(category_name)
 
         if category_page.ok:  # vérifie si la réponse est ok (code 200)
-            category_soup = BeautifulSoup(category_page.text, 'html.parser')
+            category_soup = BeautifulSoup(category_page.content, 'html.parser')
 
             # Initialiser liste de pages de la catégorie à scraper
             books_root = 'http://books.toscrape.com/catalogue/category/books/'
@@ -91,13 +119,13 @@ with open('./output/categories.csv', newline='') as file:
                 print(category_name + ': 1 page')
 
             # Ouvrir fichier pour lister les urls des livres
-            category_file_name = './output/' + category_code + '.txt'
-            with open(category_file_name, 'w') as url_file:
+            category_list = './tmp/' + category_code + '.txt'
+            with open(category_list, 'w') as url_file:
 
                 # Parcourir chaque page de catalogue
                 for catalogue in urls_catalogue:
                     catalogue_page = requests.get(catalogue)
-                    catalogue_soup = BeautifulSoup(catalogue_page.text, 'html.parser')
+                    catalogue_soup = BeautifulSoup(catalogue_page.content, 'html.parser')
 
                     # Récupérer tous les liens d'une page
                     h3_list = catalogue_soup.find('section').find_all('h3')
@@ -107,9 +135,11 @@ with open('./output/categories.csv', newline='') as file:
                         book_url = 'http://books.toscrape.com/catalogue' + h3.a['href'].replace('../../..', '')
                         url_file.write(book_url + '\n')
 
-            with open(category_file_name, 'r') as url_list:
+            with open(category_list, 'r') as url_list:
                 # Ouvrir fichier csv pour écrire les noms des livres
-                with open('output/livres.csv', 'w', encoding="utf-8") as output_file:
+
+                book_list_file = 'output/' + category_code + '.csv'
+                with open(book_list_file, 'w', encoding='utf-8-sig') as output_file:
                     # Écrire en-tête
                     output_file.write('product_page_url,universal_product_code (upc),title,price_including_tax,'
                                       'price_excluding_tax,number_available,product_description,category,review_rating,'
@@ -117,9 +147,10 @@ with open('./output/categories.csv', newline='') as file:
                     for book_url in url_list:
                         book_page = requests.get(book_url.strip())  # Response -> code 200 = ok
 
+                        # Récupérer données de la page du livre et les écrire dans fichier .csv
                         if book_page.ok:  # vérifie si la réponse est ok (code 200)
                             # print(book_page)
-                            book_soup = BeautifulSoup(book_page.text, 'html.parser')  # Récupération de la page
+                            book_soup = BeautifulSoup(book_page.content, 'html.parser')  # Récupération de la page
                             # print(book_soup.title.string)
 
                             table = book_soup.find('table')  # Chercher table
@@ -134,9 +165,9 @@ with open('./output/categories.csv', newline='') as file:
                             # Liste toutes les variables à récupérer sur le fichier csv
                             upc = liste_td[0].string
                             title = book_soup.find('h1').string
-                            price_inc_tax = liste_td[3].string.replace('Â', '')
-                            # print(liste_td[3].string)  # TODO : pourquoi le string renvoi le caractère Â ?
-                            price_exc_tax = liste_td[2].string.replace('Â', '')
+                            price_inc_tax = liste_td[3].string
+                            price_exc_tax = liste_td[2].string
+                            print(price_exc_tax + ' - ' + price_inc_tax)
                             text_number_available = liste_td[5].string
                             number_available = ''
                             # Récupérer les valeurs numériques du str → valeur de stock
