@@ -237,9 +237,10 @@ with open(categories_csv_file_path, newline='') as file:
                                     number_available = get_stocks(td_list)
 
                                     def get_product_description(book_soup__):
-                                        product_description_ = book_soup_.find(id='product_description').find_next_sibling().string
-                                        if product_description_ is not None:
-                                            return product_description_
+                                        product_description_title = book_soup__.find(id='product_description')
+                                        if product_description_title is not None:
+                                            product_description_string = product_description_title.find_next_sibling().string
+                                            return product_description_string
                                         else:
                                             return ''
 
